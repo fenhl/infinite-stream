@@ -16,7 +16,9 @@ use {
     },
     crate::impls::*,
 };
+pub use crate::fns::*;
 
+mod fns;
 mod impls;
 
 pub trait InfiniteStream {
