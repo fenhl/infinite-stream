@@ -29,6 +29,7 @@ pub struct Expect<'a, S: Stream> {
 impl<'a, S: Stream> InfiniteStream for Expect<'a, S> {
     type Item = S::Item;
 
+    #[track_caller]
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Item> {
         let mut this = self.project();
         let opt_item = ready!(this.stream.as_mut().poll_next(cx));
