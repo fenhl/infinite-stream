@@ -1,25 +1,27 @@
 use {
-    std::{
-        ops::DerefMut,
-        pin::Pin,
-        task::{
-            Context,
-            Poll,
-        },
+    std::ops::DerefMut,
+    futures::future::Either,
+    crate::{
+        impls::*,
+        internal_prelude::*,
     },
-    futures::{
-        future::{
-            Either,
-            Future,
-        },
-        stream::Stream,
-    },
-    crate::impls::*,
 };
-pub use crate::fns::*;
+pub use crate::{
+    from_future::from_future,
+    pending::pending,
+    try_from_future::try_from_future,
+    try_unfold::try_unfold,
+    unfold::unfold,
+};
 
-mod fns;
+mod from_future;
 mod impls;
+mod internal_prelude;
+mod pending;
+#[cfg(feature = "tokio-stream")] mod tokio_stream;
+mod try_from_future;
+mod try_unfold;
+mod unfold;
 
 pub trait InfiniteStream {
     type Item;
@@ -69,9 +71,24 @@ pub trait InfiniteStreamExt: InfiniteStream {
         assert_future::<Self::Item, _>(Next(self))
     }
 
+    fn boxed<'a>(self) -> Pin<Box<dyn InfiniteStream<Item = Self::Item> + Send + 'a>>
+    where Self: Send + Sized + 'a {
+        assert_infinite_stream::<Self::Item, _>(Box::pin(self))
+    }
+
+    fn filter<Fut: Future<Output = bool>, F: FnMut(&Self::Item) -> Fut>(self, f: F) -> Filter<Self, Fut, F>
+    where Self: Sized {
+        assert_infinite_stream::<Self::Item, _>(Filter { stream: self, f, pending_fut: None, pending_item: None })
+    }
+
     fn left_stream<B: InfiniteStream<Item = Self::Item>>(self) -> Either<Self, B>
     where Self: Sized {
         assert_infinite_stream::<Self::Item, _>(Either::Left(self))
+    }
+
+    fn map<T, F: FnMut(Self::Item) -> T>(self, f: F) -> Map<Self, F>
+    where Self: Sized {
+        assert_infinite_stream::<T, _>(Map { stream: self, f })
     }
 
     fn poll_next_unpin(&mut self, cx: &mut Context<'_>) -> Poll<Self::Item>
@@ -88,6 +105,17 @@ pub trait InfiniteStreamExt: InfiniteStream {
 impl<T: InfiniteStream + ?Sized> InfiniteStreamExt for T {}
 
 pub trait StreamExt: Stream {
+    fn chain_infinite<B: InfiniteStream<Item = Self::Item>>(self, second: B) -> Chain<Self, B>
+    where Self: Sized {
+        assert_infinite_stream::<Self::Item, _>(Chain { first: Some(self), second })
+    }
+
+    /// Shorthand for `.chain_infinite(infinite_stream::pending())`.
+    fn chain_pending(self) -> Chain<Self, crate::pending::Pending<Self::Item>>
+    where Self: Sized {
+        assert_infinite_stream::<Self::Item, _>(Chain { first: Some(self), second: pending() })
+    }
+
     fn expect(self, msg: &str) -> Expect<'_, Self>
     where Self: Sized {
         assert_infinite_stream::<Self::Item, _>(Expect { stream: self, msg })

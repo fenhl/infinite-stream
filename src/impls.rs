@@ -1,22 +1,4 @@
-use {
-    std::{
-        pin::Pin,
-        task::{
-            Context,
-            Poll,
-        },
-    },
-    futures::{
-        future::Future,
-        ready,
-        stream::Stream,
-    },
-    pin_project::pin_project,
-    crate::{
-        InfiniteStream,
-        InfiniteStreamExt as _,
-    },
-};
+use crate::internal_prelude::*;
 
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
@@ -61,6 +43,57 @@ impl<'a, S: Stream> InfiniteStream for Expect<'a, S> {
     }
 }
 
+#[pin_project]
+#[must_use = "streams do nothing unless polled"]
+pub struct Filter<S: InfiniteStream, Fut, F> {
+    #[pin]
+    pub(crate) stream: S,
+    pub(crate) f: F,
+    #[pin]
+    pub(crate) pending_fut: Option<Fut>,
+    pub(crate) pending_item: Option<S::Item>,
+}
+
+impl<S: InfiniteStream, Fut: Future<Output = bool>, F: for<'a> FnMut(&'a S::Item) -> Fut> InfiniteStream for Filter<S, Fut, F> {
+    type Item = S::Item;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Item> {
+        let mut this = self.project();
+        Poll::Ready(loop {
+            if let Some(fut) = this.pending_fut.as_mut().as_pin_mut() {
+                let res = ready!(fut.poll(cx));
+                this.pending_fut.set(None);
+                if res {
+                    break this.pending_item.take().unwrap()
+                }
+                *this.pending_item = None;
+            } else {
+                let item = ready!(this.stream.as_mut().poll_next(cx));
+                this.pending_fut.set(Some((this.f)(&item)));
+                *this.pending_item = Some(item);
+            }
+        })
+    }
+}
+
+#[pin_project]
+#[must_use = "streams do nothing unless polled"]
+pub struct Map<S, F> {
+    #[pin]
+    pub(crate) stream: S,
+    pub(crate) f: F,
+}
+
+impl<T, S: InfiniteStream, F: FnMut(S::Item) -> T> InfiniteStream for Map<S, F> {
+    type Item = T;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Item> {
+        let mut this = self.project();
+        let item = ready!(this.stream.as_mut().poll_next(cx));
+        Poll::Ready((this.f)(item))
+    }
+}
+
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 pub struct Next<'a, S: InfiniteStream + Unpin + ?Sized>(pub(crate) &'a mut S);
 
@@ -71,47 +104,5 @@ impl<S: InfiniteStream + Unpin + ?Sized> Future for Next<'_, S> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.0.poll_next_unpin(cx)
-    }
-}
-
-#[pin_project]
-#[must_use = "streams do nothing unless polled"]
-pub struct Unfold<T, F, Fut>
-where F: FnMut(T) -> Fut,
-Fut: Future {
-    pub(crate) f: F,
-    #[pin]
-    pub(crate) state: UnfoldState<T, Fut>,
-}
-
-#[pin_project(project = UnfoldStateProj, project_replace = UnfoldStateProjReplace)]
-pub(crate) enum UnfoldState<T, Fut> {
-    Value(T),
-    Future(#[pin] Fut),
-    Empty,
-}
-
-impl<T, F, Fut, Item> InfiniteStream for Unfold<T, F, Fut>
-where F: FnMut(T) -> Fut,
-Fut: Future<Output = (Item, T)> {
-    type Item = Item;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Item> {
-        let mut this = self.project();
-        let fut = match this.state.as_mut().project() {
-            UnfoldStateProj::Value(_) => {
-                let UnfoldStateProjReplace::Value(state) = this.state.as_mut().project_replace(UnfoldState::Empty) else { unreachable!() };
-                this.state.set(UnfoldState::Future((this.f)(state)));
-                match this.state.as_mut().project() {
-                    UnfoldStateProj::Future(fut) => fut,
-                    _ => unreachable!(),
-                }
-            }
-            UnfoldStateProj::Future(fut) => fut,
-            UnfoldStateProj::Empty => unreachable!(),
-        };
-        let (item, next_state) = ready!(fut.poll(cx));
-        this.state.set(UnfoldState::Value(next_state));
-        Poll::Ready(item)
     }
 }

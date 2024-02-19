@@ -17,3 +17,7 @@ warnings = "deny"
 [dependencies]
 futures = "0.3.30"
 pin-project = "1.1.4"
+tokio-stream = { version = "0.1.14", optional = true, features = ["time"] }
+
+[features]
+tokio-stream = ["dep:tokio-stream"]
