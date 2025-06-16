@@ -2,6 +2,9 @@
 name = "infinite-stream"
 version = "0.1.0"
 edition = "2024"
+description = "Streams (asynchronous iterators) that always keep yielding items (or panic, or become pending forever)"
+license = "MIT"
+repository = "https://github.com/fenhl/infinite-stream"
 
 [lints.rust]
 #missing_docs = "deny" #TODO
