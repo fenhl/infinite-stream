@@ -111,7 +111,7 @@ pub trait StreamExt: Stream {
     }
 
     /// Shorthand for `.chain_infinite(infinite_stream::pending())`.
-    fn chain_pending(self) -> Chain<Self, crate::pending::Pending<Self::Item>>
+    fn chain_pending(self) -> Chain<Self, pending::Pending<Self::Item>>
     where Self: Sized {
         assert_infinite_stream::<Self::Item, _>(Chain { first: Some(self), second: pending() })
     }
