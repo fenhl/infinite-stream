@@ -6,7 +6,7 @@ pub fn try_from_future<T, E, S: InfiniteStream<Item = Result<T, E>>, Fut: Future
 
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
-pub struct TryFromFuture<S, Fut> {
+pub struct TryFromFuture<S: InfiniteStream, Fut> {
     #[pin]
     state: TryFromFutureState<S, Fut>,
 }

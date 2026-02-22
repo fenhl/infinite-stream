@@ -6,7 +6,7 @@ pub fn from_future<S: InfiniteStream, Fut: Future<Output = S>>(fut: Fut) -> From
 
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
-pub struct FromFuture<S, Fut> {
+pub struct FromFuture<S: InfiniteStream, Fut> {
     #[pin]
     state: FromFutureState<S, Fut>,
 }

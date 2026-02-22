@@ -83,6 +83,11 @@ pub trait InfiniteStreamExt: InfiniteStream {
         assert_infinite_stream::<Self::Item, _>(Filter { stream: self, f, pending_fut: None, pending_item: None })
     }
 
+    fn filter_map<T, Fut: Future<Output = Option<T>>, F: FnMut(Self::Item) -> Fut>(self, f: F) -> FilterMap<Self, Fut, F>
+    where Self: Sized {
+        assert_infinite_stream::<T, _>(FilterMap { stream: self, f, pending: None })
+    }
+
     fn left_stream<B: InfiniteStream<Item = Self::Item>>(self) -> Either<Self, B>
     where Self: Sized {
         assert_infinite_stream::<Self::Item, _>(Either::Left(self))

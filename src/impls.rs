@@ -78,7 +78,37 @@ impl<S: InfiniteStream, Fut: Future<Output = bool>, F: for<'a> FnMut(&'a S::Item
 
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
-pub struct Map<S, F> {
+pub struct FilterMap<S: InfiniteStream, Fut, F> {
+    #[pin]
+    pub(crate) stream: S,
+    pub(crate) f: F,
+    #[pin]
+    pub(crate) pending: Option<Fut>,
+}
+
+impl<T, S: InfiniteStream, Fut: Future<Output = Option<T>>, F: FnMut(S::Item) -> Fut> InfiniteStream for FilterMap<S, Fut, F> {
+    type Item = T;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Item> {
+        let mut this = self.project();
+        Poll::Ready(loop {
+            if let Some(fut) = this.pending.as_mut().as_pin_mut() {
+                let item = ready!(fut.poll(cx));
+                this.pending.set(None);
+                if let Some(item) = item {
+                    break item
+                }
+            } else {
+                let item = ready!(this.stream.as_mut().poll_next(cx));
+                this.pending.set(Some((this.f)(item)));
+            }
+        })
+    }
+}
+
+#[pin_project]
+#[must_use = "streams do nothing unless polled"]
+pub struct Map<S: InfiniteStream, F> {
     #[pin]
     pub(crate) stream: S,
     pub(crate) f: F,
@@ -109,7 +139,7 @@ impl<S: InfiniteStream + Unpin + ?Sized> Future for Next<'_, S> {
 
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
-pub struct Then<S, Fut, F> {
+pub struct Then<S: InfiniteStream, Fut, F> {
     #[pin]
     pub(crate) stream: S,
     #[pin]
