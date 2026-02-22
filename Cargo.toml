@@ -1,6 +1,6 @@
 [package]
 name = "infinite-stream"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Streams (asynchronous iterators) that always keep yielding items (or panic, or become pending forever)"
 license = "MIT"
@@ -18,9 +18,9 @@ unused_qualifications = "deny"
 warnings = "deny"
 
 [dependencies]
-futures = "0.3.30"
-pin-project = "1.1.4"
-tokio-stream = { version = "0.1.14", optional = true, features = ["time"] }
+futures = "0.3"
+pin-project = "1"
+tokio-stream = { version = "0.1", optional = true, features = ["time"] }
 
 [features]
 tokio-stream = ["dep:tokio-stream"]

@@ -106,3 +106,31 @@ impl<S: InfiniteStream + Unpin + ?Sized> Future for Next<'_, S> {
         self.0.poll_next_unpin(cx)
     }
 }
+
+#[pin_project]
+#[must_use = "streams do nothing unless polled"]
+pub struct Then<S, Fut, F> {
+    #[pin]
+    pub(crate) stream: S,
+    #[pin]
+    pub(crate) fut: Option<Fut>,
+    pub(crate) f: F,
+}
+
+impl<T, S: InfiniteStream, Fut: Future<Output = T>, F: FnMut(S::Item) -> Fut> InfiniteStream for Then<S, Fut, F> {
+    type Item = T;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Item> {
+        let mut this = self.project();
+        Poll::Ready(loop {
+            if let Some(fut) = this.fut.as_mut().as_pin_mut() {
+                let item = ready!(fut.poll(cx));
+                this.fut.set(None);
+                break item
+            } else {
+                let item = ready!(this.stream.as_mut().poll_next(cx));
+                this.fut.set(Some((this.f)(item)));
+            }
+        })
+    }
+}

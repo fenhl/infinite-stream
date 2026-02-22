@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use {
     std::ops::DerefMut,
     futures::future::Either,
@@ -99,6 +101,11 @@ pub trait InfiniteStreamExt: InfiniteStream {
     fn right_stream<A: InfiniteStream<Item = Self::Item>>(self) -> Either<A, Self>
     where Self: Sized {
         assert_infinite_stream::<Self::Item, _>(Either::Right(self))
+    }
+
+    fn then<T, Fut: Future<Output = T>, F: FnMut(Self::Item) -> Fut>(self, f: F) -> Then<Self, Fut, F>
+    where Self: Sized {
+        assert_infinite_stream::<T, _>(Then { stream: self, fut: None, f })
     }
 }
 

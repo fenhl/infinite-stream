@@ -5,5 +5,6 @@ Besides manually implementing the `InfiniteStream` trait, this crate currently o
 * An `expect` extension method on regular (possibly finite) streams, which returns a wrapper stream that panics if `None` is yielded from the inner stream.
 * A `pending` function which returns an infinite stream that never yields any items, and a `chain_pending` method on regular streams which becomes pending after the inner stream is exhausted.
 * The functions `unfold` and `try_unfold` which are similar to the ones for regular streams.
+* The functions `from_future` and `try_from_future` which turn a future that resolves to an infinite stream into an infinite stream yielding the same items.
 
 This crate's implementation is heavily based on the implementation of the `Stream` trait and related helpers from the [`futures`](https://docs.rs/futures) crate. However, this crate is in early stages of development and doesn't offer equivalents for most of the helpers from `futures` yet. Pull requests are welcome.
